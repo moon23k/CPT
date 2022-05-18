@@ -39,7 +39,7 @@ class Config(object):
         self.scheduler = args.scheduler
         self.clip = 1
         self.pad_idx = 1
-        self.n_epochs = 1
+        self.n_epochs = 5
         self.batch_size = 128
         self.best_valid_loss = float('inf')
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

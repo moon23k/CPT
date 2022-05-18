@@ -6,7 +6,7 @@ from torch.optim import lr_scheduler
 #Custom CosineAnnealingWarmUpRestarts scheduler
 #code borrowed from https://gaussian37.github.io/dl-pytorch-lr_scheduler
 class CosineAnnealingWarmUpRestarts(lr_scheduler._LRScheduler):
-    def __init__(self, optimizer, T_0=5, T_mult=1, eta_max=1e-3, T_up=5, gamma=0.7, last_epoch=-1):
+    def __init__(self, optimizer, T_0=3, T_mult=1, eta_max=1e-3, T_up=5, gamma=0.7, last_epoch=-1):
         super(CosineAnnealingWarmUpRestarts, self).__init__(optimizer, last_epoch)
         self.T_0 = T_0
         self.T_mult = T_mult
@@ -62,7 +62,7 @@ class CosineAnnealingWarmUpRestarts(lr_scheduler._LRScheduler):
 
 
 class NoamLR(lr_scheduler._LRScheduler):
-    def __init__(self, optimizer, warmup_steps=5):
+    def __init__(self, optimizer, warmup_steps=3):
         self.warmup_steps = warmup_steps
         super().__init__(optimizer)
 

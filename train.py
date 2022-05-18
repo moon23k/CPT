@@ -38,15 +38,8 @@ def run(config):
 
     #load model, criterion, optimizer, scheduler
     model = load_model(config)
-    
-
-    #Apply label_smoothing on transformer model
-    if config.model == 'transformer':
-        criterion = nn.CrossEntropyLoss(ignore_index=config.pad_idx, label_smoothing=0.1).to(config.device)
-    else:
-        criterion = nn.CrossEntropyLoss(ignore_index=config.pad_idx).to(config.device)
+    criterion = nn.CrossEntropyLoss(ignore_index=config.pad_idx, label_smoothing=0.1).to(config.device)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
-	
 
     if config.scheduler != "constant":
         scheduler = get_scheduler(config.scheduler, optimizer)
