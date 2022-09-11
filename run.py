@@ -18,7 +18,6 @@ from modules.data import load_dataloader
 
 
 
-
 class Config(object):
     def __init__(self, args):    
         with open('configs/model.yaml', 'r') as f:
@@ -28,6 +27,7 @@ class Config(object):
                 setattr(self, p[0], p[1])
 
         self.task = args.task
+        self.scheduler = args.scheduler
         self.model_name = args.model
         
         self.unk_idx = 0
@@ -36,20 +36,16 @@ class Config(object):
         self.eos_idx = 3
 
         self.clip = 1
-        self.n_epochs = 1
-        self.batch_size = 128
+        self.n_epochs = 10
+        self.batch_size = 16
 
         if self.task != 'train':
             self.ckpt = f'ckpt/{self.model_name}.pt'
 
-        if self.task == 'train':
-            self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-            if self.scheduler == 'constant':
-                self.learning_rate = 1e-3
-                self.scheduler = None
-            elif self.scheduler == 'noam':
-                self.learning_rate = 1e-3
-                self.scheduler = optim.lr_scheduler()
+        if self.model_name == 'transformer':
+            self.learning_rate = 1e-4
+        else:
+            self.learning_rate = 1e-3
 
         if self.task == 'inference':
             self.device = torch.device('cpu')
@@ -63,7 +59,6 @@ class Config(object):
             print(f"* {attribute}: {value}")
 
 
-
 def set_seed(SEED=42):
     random.seed(SEED)
     np.random.seed(SEED)
@@ -74,13 +69,11 @@ def set_seed(SEED=42):
     cudnn.deterministic = True
 
 
-
 def load_tokenizer(lang):
     tokenizer = spm.SentencePieceProcessor()
     tokenizer.load(f'data/{lang}_tokenizer.model')
     tokenizer.SetEncodeExtraOptions('bos:eos')
     return tokenizer
-
 
 
 def load_model(config):
@@ -92,11 +85,10 @@ def load_model(config):
         model = Transformer(config)
 
     if config.task != 'train':
-        model_state = torch.load(config.ckpt_path, map_location=config.device)['model_state_dict']
+        model_state = torch.load(config.ckpt, map_location=config.device)['model_state_dict']
         model.load_state_dict(model_state)
 
     return model.to(config.device)
-
 
 
 def main(config):
@@ -105,7 +97,7 @@ def main(config):
     if config.task == 'train':
         train_dataloader = load_dataloader(config, 'train')
         valid_dataloader = load_dataloader(config, 'valid')        
-        trainer = Trainer(model, config, train_dataloader, valid_dataloader)
+        trainer = Trainer(config, model, train_dataloader, valid_dataloader)
         trainer.train()
     
     elif config.task == 'test':
@@ -117,16 +109,15 @@ def main(config):
     elif config.task == 'inference':
         src_tokenizer = load_tokenizer('en')
         trg_tokenizer = load_tokenizer('de')
-        translator = Translator(model, config, src_tokenizer, trg_tokenizer)
+        translator = Translator(config, model, src_tokenizer, trg_tokenizer)
         translator.translate()
     
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-task', required=True)
-    parser.add_argument('-model', required=True)
-    parser.add_argument('-scheduler', required=False)
+    parser.add_argument('-task', type=str, required=True)
+    parser.add_argument('-model', type=str, required=True)
+    parser.add_argument('-scheduler', type=str, default='constant', required=False)
     
     args = parser.parse_args()
     assert args.task in ['train', 'test', 'inference']

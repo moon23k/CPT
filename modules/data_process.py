@@ -1,7 +1,6 @@
-import re, os, yaml
+import re, os, yaml, json
 from tqdm import tqdm
 import sentencepiece as spm
-
 
 
 
@@ -118,3 +117,4 @@ if __name__ == '__main__':
     assert os.path.exists(f'data/train.json')
     assert os.path.exists(f'data/valid.json')
     assert os.path.exists(f'data/test.json')
+    os.remove('data/dialogues_text.txt')
