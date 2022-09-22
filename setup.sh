@@ -10,4 +10,4 @@ mv ijcnlp_dailydialog/dialogues_text.txt .
 rm -rf ijcnlp_dailydialog
 
 cd ..
-python3 process_data.py
+python3 modules/data_processing.py

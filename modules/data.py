@@ -10,7 +10,7 @@ def read_json(f_name):
     return data
 
 
-class NMTDataset(Dataset):
+class ChatDataset(Dataset):
     def __init__(self, config, split):
         super().__init__()
         self.model_name = config.model_name
@@ -20,7 +20,7 @@ class NMTDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        src = self.data[idx]['src_ids']
+        src = self.data[idx]['src']
         if self.model_name == 'transformer':
             trg = self.data[idx]['trg'][:-1]
         else:
@@ -72,7 +72,7 @@ def transformer_collate(batch):
 
 
 def load_dataloader(config, split):
-    dataset = NMTDataset(config, split)
+    dataset = ChatDataset(config, split)
     
     if config.model_name == 'transformer':
         return DataLoader(dataset, 
