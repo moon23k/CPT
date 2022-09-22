@@ -4,6 +4,22 @@ import sentencepiece as spm
 
 
 
+
+def download_data():
+	cmd = """
+	mkdir -p data; 
+	cd data; 
+	wget http://yanran.li/files/ijcnlp_dailydialog.zip;
+	unzip *.zip;
+	rm *.zip;
+	mv ijcnlp_dailydialog/dialogues_text.txt .;
+	rm -rf ijcnlp_dailydialog;
+	"""
+
+	os.system(cmd)
+
+
+
 def build_vocab():
     assert os.path.exists(f'configs/vocab.yaml')
     assert os.path.exists(f'data/concat.txt')
@@ -117,4 +133,4 @@ if __name__ == '__main__':
     assert os.path.exists(f'data/train.json')
     assert os.path.exists(f'data/valid.json')
     assert os.path.exists(f'data/test.json')
-    os.remove('data/dialogues_text.txt')
+    os.remove('data/dialogues_text.txt')	
