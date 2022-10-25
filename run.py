@@ -104,7 +104,7 @@ def check_size(model):
 
 def load_tokenizer():
     tokenizer = spm.SentencePieceProcessor()
-    tokenizer.load(f'data/spm.model')
+    tokenizer.load('data/spm.model')
     tokenizer.SetEncodeExtraOptions('bos:eos')
     return tokenizer
 
@@ -144,8 +144,8 @@ def main(config):
         tester.test()
     
     elif config.task == 'inference':
-        translator = Translator(model, config)
-        translator.translate()
+        generator = Generator(model, config)
+        generator.generate()
     
 
 

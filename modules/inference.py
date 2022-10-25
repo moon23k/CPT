@@ -1,6 +1,5 @@
-import torch
+import torch, run
 import sentencepiece as spm
-from run import load_tokenizer
 from modules.search import SeqSearch, AttnSearch, TransSearch
 
 
@@ -12,7 +11,7 @@ class Generator:
         self.search = config.search
         self.bos_idx = config.bos_idx
         self.model_name == config.model_name
-        self.tokenizer = load_tokenizer()
+        self.tokenizer = run.load_tokenizer()
 
         if self.model.training:
             self.model.eval()

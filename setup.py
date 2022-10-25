@@ -1,6 +1,5 @@
-import re, os, yaml, json
+import re, os, yaml, json, run
 import sentencepiece as spm
-from run import load_tokenizer
 
 
 
@@ -41,7 +40,7 @@ def build_vocab():
 
 
 def tokenize_data(src_data, trg_data):
-    tokenizer = load_tokenizer()
+    tokenizer = run.load_tokenizer()
     tokenized_data = []
     for src, trg in zip(src_data, trg_data):
         temp_dict = dict()
