@@ -12,7 +12,7 @@ class Tester:
     def __init__(self, config, model):
         super(Tester, self).__init__(config, model)
         self.model = model
-        self.tokenizer = load_tokenizer('trg')
+        self.tokenizer = load_tokenizer()
         self.dataloader = load_dataloader(config, 'test')
 
         self.device = config.device

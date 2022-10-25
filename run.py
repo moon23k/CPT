@@ -13,7 +13,7 @@ from models.transformer import Transformer
 
 from modules.test import Tester
 from modules.train import Trainer
-from modules.inference import Translator
+from modules.inference import Generator
 from modules.data import load_dataloader
 
 
@@ -102,9 +102,9 @@ def check_size(model):
     return size_all_mb
 
 
-def load_tokenizer(lang):
+def load_tokenizer():
     tokenizer = spm.SentencePieceProcessor()
-    tokenizer.load(f'data/{lang}_spm.model')
+    tokenizer.load(f'data/spm.model')
     tokenizer.SetEncodeExtraOptions('bos:eos')
     return tokenizer
 

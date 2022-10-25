@@ -1,22 +1,20 @@
 import re, os, yaml, json
-from tqdm import tqdm
 import sentencepiece as spm
-
+from run import load_tokenizer
 
 
 
 def download_data():
-	cmd = """
-	mkdir -p data; 
-	cd data; 
-	wget http://yanran.li/files/ijcnlp_dailydialog.zip;
-	unzip *.zip;
-	rm *.zip;
-	mv ijcnlp_dailydialog/dialogues_text.txt .;
-	rm -rf ijcnlp_dailydialog;
-	"""
-
-	os.system(cmd)
+    cmd = """
+    mkdir -p data; 
+    cd data; 
+    wget http://yanran.li/files/ijcnlp_dailydialog.zip;
+    unzip *.zip;
+    rm *.zip;
+    mv ijcnlp_dailydialog/dialogues_text.txt .;
+    rm -rf ijcnlp_dailydialog;
+    """
+    os.system(cmd)
 
 
 
@@ -28,7 +26,7 @@ def build_vocab():
         vocab_dict = yaml.load(f, Loader=yaml.FullLoader)
     
     opt = f"--input=data/concat.txt\
-            --model_prefix=data/tokenizer\
+            --model_prefix=data/spm\
             --vocab_size={vocab_dict['vocab_size']}\
             --character_coverage={vocab_dict['coverage']}\
             --model_type={vocab_dict['type']}\
@@ -42,7 +40,8 @@ def build_vocab():
 
 
 
-def tokenize_data(src_data, trg_data, tokenizer):
+def tokenize_data(src_data, trg_data):
+    tokenizer = load_tokenizer()
     tokenized_data = []
     for src, trg in zip(src_data, trg_data):
         temp_dict = dict()
@@ -58,7 +57,7 @@ def tokenize_data(src_data, trg_data, tokenizer):
 
 def split_data(dataset, downsize):
     src, trg = [], []
-    for dial in tqdm(dataset):
+    for dial in dataset:
         _seq = dial.split("__eou__")[:-1]
         seq_len = len(_seq)
         seq = []
@@ -104,16 +103,11 @@ def split_data(dataset, downsize):
 
 
 
-
 def main(orig_data, downsize=True):
     src, trg = split_data(orig_data, downsize)
+    
     build_vocab()
-
-    tokenizer = spm.SentencePieceProcessor()
-    tokenizer.load('data/tokenizer.model')
-    tokenizer.SetEncodeExtraOptions('bos:eos')
-
-    tokenized_data = tokenize_data(src, trg, tokenizer)
+    tokenized_data = tokenize_data(src, trg)
     
     train, valid, test = tokenized_data[:-6000], tokenized_data[-6000:-3000], tokenized_data[-3000:]
     data_dict = {k:v for k, v in zip(['train', 'valid', 'test'], [train, valid, test])}
@@ -125,6 +119,7 @@ def main(orig_data, downsize=True):
 
 
 if __name__ == '__main__':
+    download_data()
     assert os.path.exists(f'data/dialogues_text.txt')
     with open('data/dialogues_text.txt', 'r') as f:
         orig_data = f.readlines()
@@ -133,4 +128,4 @@ if __name__ == '__main__':
     assert os.path.exists(f'data/train.json')
     assert os.path.exists(f'data/valid.json')
     assert os.path.exists(f'data/test.json')
-    os.remove('data/dialogues_text.txt')	
+    os.remove('data/dialogues_text.txt')    
