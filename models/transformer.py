@@ -1,161 +1,165 @@
-import math, copy
-import torch
+import torch, copy, math
 import torch.nn as nn
-import torch.nn.functional as F
 
 
-def get_clones(module, N):
+def clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
 
-class TokenEmbedding(nn.Module):
-    def __init__(self, config):
-        super(TokenEmbedding, self).__init__()
-        self.embedding = nn.Embedding(config.input_dim, config.emb_dim)
-        scale = torch.sqrt(torch.FloatTensor([config.emb_dim])).to(config.device)
-        self.register_buffer('scale', scale)
+
+def attention(query, key, value, mask=None, dropout=None):
+    d_k = query.size(-1)
+    scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
     
-    def forward(self, x):
-        return self.embedding(x) * self.scale
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, -1e9)
+    p_attn = scores.softmax(dim=-1)
+
+    if dropout is not None:
+        p_attn = dropout(p_attn)
+    return torch.matmul(p_attn, value), p_attn
 
 
-class PosEncoding(nn.Module):
+class PositionalEncoding(nn.Module):
     def __init__(self, config, max_len=512):
-        super(PosEncoding, self).__init__()
-        pe = torch.zeros(max_len, config.emb_dim)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, config.emb_dim, 2) * (-math.log(10000.0) / config.emb_dim))
+        super(PositionalEncoding, self).__init__()
 
+        pe = torch.zeros(max_len, config.emb_dim)
+        position = torch.arange(0, max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, config.emb_dim, 2) * -(math.log(10000.0) / config.emb_dim))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
+        pe = pe.unsqueeze(0)
+        self.register_buffer("pe", pe)
+        self.dropout = nn.Dropout(config.dropout_ratio)
 
     def forward(self, x):
-        return self.pe[:x.size(1), :].detach()
+        x = x + self.pe[:, : x.size(1)].requires_grad_(False)
+        return self.dropout(x)
 
 
 class Embeddings(nn.Module):
     def __init__(self, config):
         super(Embeddings, self).__init__()
-        self.tok_emb = TokenEmbedding(config)
-        self.pos_enc = PosEncoding(config)
-        self.dropout = nn.Dropout(config.dropout_ratio)
+        self.lut = nn.Embedding(config.input_dim, config.emb_dim)
+        self.scale = math.sqrt(config.emb_dim)
+        self.pos_encoding = PositionalEncoding(config)
 
     def forward(self, x):
-        return self.dropout(self.tok_emb(x) + self.pos_enc(x))
+        out = self.lut(x) * self.scale
+        return self.pos_encoding(out) 
 
 
-class MultiHeadAttn(nn.Module):
+class MultiHeadAttention(nn.Module):
     def __init__(self, config):
-        super(MultiHeadAttn, self).__init__()
-        self.hidden_dim = config.hidden_dim
+        super(MultiHeadAttention, self).__init__()
+        assert config.hidden_dim % config.n_heads == 0
+        
         self.n_heads = config.n_heads
-        assert self.hidden_dim % self.n_heads == 0
         self.head_dim = config.hidden_dim // config.n_heads
-
-        self.fc_q = nn.Linear(config.hidden_dim, config.hidden_dim)
-        self.fc_k = nn.Linear(config.hidden_dim, config.hidden_dim)
-        self.fc_v = nn.Linear(config.hidden_dim, config.hidden_dim)
-        self.fc_out = nn.Linear(config.hidden_dim, config.hidden_dim)
+        
+        self.attn = None
         self.dropout = nn.Dropout(config.dropout_ratio)
+        self.linears = clones(nn.Linear(config.hidden_dim, config.hidden_dim), 4)
 
     def forward(self, query, key, value, mask=None):
-        batch_size = key.size(0)
-        Q, K, V = self.fc_q(query), self.fc_k(key), self.fc_v(value)
-        Q, K, V = self.split(Q), self.split(K), self.split(V)
+        batch_size = query.size(0)
+        query, key, value = [lin(x).view(batch_size, -1, self.n_heads, self.head_dim).transpose(1, 2)
+                             for lin, x in zip(self.linears, (query, key, value))]
 
-        out = self.attention(Q, K, V, mask)
-        out = out.permute(0, 2, 1, 3).contiguous().view(batch_size, -1, self.hidden_dim)
-        return self.fc_out(out)
-
-
-    def attention(self, query, key, value, mask):
-        d_k = key.size(-1)        
-        score = torch.matmul(query, key.permute(0, 1, 3, 2)) / math.sqrt(d_k)
-
-        if mask is not None:
-            attn_score = score.masked_fill(mask==0, -1e9)
-        prob = F.softmax(score, dim=-1)
-        return torch.matmul(self.dropout(prob), value)
-    
-    def split(self, x):
-        return x.view(x.size(0), -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
+        x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
+        x = (x.transpose(1, 2).contiguous().view(batch_size, -1, self.n_heads * self.head_dim))
+        
+        del query, key, value
+        return self.linears[-1](x)
 
 
-class PositionwiseFFN(nn.Module):
+class PositionwiseFeedForward(nn.Module):
     def __init__(self, config):
-        super(PositionwiseFFN, self).__init__()
-        self.fc_1 = nn.Linear(config.hidden_dim, config.pff_dim)
-        self.fc_2 = nn.Linear(config.pff_dim, config.hidden_dim)
+        super(PositionwiseFeedForward, self).__init__()
+        self.w_1 = nn.Linear(config.hidden_dim, config.pff_dim)
+        self.w_2 = nn.Linear(config.pff_dim, config.hidden_dim)
         self.dropout = nn.Dropout(config.dropout_ratio)
 
     def forward(self, x):
-        out = self.fc_1(x)
-        out = self.dropout(F.relu(out))
-        return self.fc_2(out)
+        return self.w_2(self.dropout(self.w_1(x).relu()))
 
 
-class ResidualConn(nn.Module):
+class LayerNorm(nn.Module):
+    def __init__(self, features, eps=1e-6):
+        super(LayerNorm, self).__init__()
+        self.a_2 = nn.Parameter(torch.ones(features))
+        self.b_2 = nn.Parameter(torch.zeros(features))
+        self.eps = eps
+
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
+
+
+class SublayerConnection(nn.Module):
     def __init__(self, config):
-        super(ResidualConn, self).__init__()
-        self.layer_norm = nn.LayerNorm(config.hidden_dim)
+        super(SublayerConnection, self).__init__()
+        self.norm = LayerNorm(config.hidden_dim)
         self.dropout = nn.Dropout(config.dropout_ratio)
 
     def forward(self, x, sublayer):
-        out = x + sublayer(x)
-        return self.dropout(self.layer_norm(out))
+        return x + self.dropout(sublayer(self.norm(x)))
 
 
 class EncoderLayer(nn.Module):
     def __init__(self, config):
         super(EncoderLayer, self).__init__()
-        self.self_attn = MultiHeadAttn(config)
-        self.pff = PositionwiseFFN(config)
-        self.residual_conn = get_clones(ResidualConn(config), 2)
+        self.self_attn = MultiHeadAttention(config)
+        self.feed_forward = PositionwiseFeedForward(config)
+        self.sublayer = clones(SublayerConnection(config), 2)
 
-    def forward(self, x, src_mask):
-        x = self.residual_conn[0](x, lambda x: self.self_attn(x, x, x, src_mask))
-        x = self.residual_conn[1](x, self.pff)
-        return x
+    def forward(self, x, mask):
+        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
+        return self.sublayer[1](x, self.feed_forward)
 
 
 class DecoderLayer(nn.Module):
     def __init__(self, config):
         super(DecoderLayer, self).__init__()
-        self.self_attn = MultiHeadAttn(config)
-        self.cross_attn = MultiHeadAttn(config)
-        self.pff = PositionwiseFFN(config)
-        self.residual_conn = get_clones(ResidualConn(config), 3)
-    
-    def forward(self, x, memory, src_mask, trg_mask):
-        x = self.residual_conn[0](x, lambda x: self.self_attn(x, x, x, trg_mask))
-        x = self.residual_conn[1](x, lambda x: self.cross_attn(x, memory, memory, src_mask))
-        return self.residual_conn[2](x, self.pff)
+        self.self_attn = MultiHeadAttention(config)
+        self.src_attn = MultiHeadAttention(config)
+        self.feed_forward = PositionwiseFeedForward(config)
+        self.sublayer = clones(SublayerConnection(config), 3)
+
+    def forward(self, x, memory, e_mask, d_mask):
+        m = memory
+        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, d_mask))
+        x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, e_mask))
+        return self.sublayer[2](x, self.feed_forward)
 
 
 class Encoder(nn.Module):
     def __init__(self, config):
         super(Encoder, self).__init__()
-        self.embeddings = Embeddings(config)
-        self.layers = get_clones(EncoderLayer(config), config.n_layers)
+        self.emb = Embeddings(config)
+        self.norm = LayerNorm(config.hidden_dim)
+        self.layers = clones(EncoderLayer(config), config.n_layers)
 
-    def forward(self, src, src_mask):
-        src = self.embeddings(src)
+    def forward(self, x, mask):
+        x = self.emb(x)
         for layer in self.layers:
-            src = layer(src, src_mask)
-        return src
+            x = layer(x, mask)
+        return self.norm(x)
 
 
 class Decoder(nn.Module):
     def __init__(self, config):
         super(Decoder, self).__init__()
-        self.embeddings = Embeddings(config)
-        self.layers = get_clones(DecoderLayer(config), config.n_layers)
-    
-    def forward(self, trg, memory, src_mask, trg_mask):
-        trg = self.embeddings(trg)
+        self.emb = Embeddings(config)
+        self.norm = LayerNorm(config.hidden_dim)
+        self.layers = clones(DecoderLayer(config), config.n_layers)
+
+    def forward(self, x, memory, e_mask, d_mask):
+        x = self.emb(x)
         for layer in self.layers:
-            trg = layer(trg, memory, src_mask, trg_mask)
-        return trg
+            x = layer(x, memory, e_mask, d_mask)
+        return self.norm(x)
 
 
 class Transformer(nn.Module):
@@ -166,22 +170,18 @@ class Transformer(nn.Module):
         self.encoder = Encoder(config)
         self.decoder = Decoder(config)
         self.fc_out = nn.Linear(config.hidden_dim, config.output_dim)
-        self.apply(self._init_weights)
+
+    def pad_mask(self, x):
+        return (x != self.pad_idx).unsqueeze(1).unsqueeze(2)
+
+    def dec_mask(self, x):
+        seq_len = x.size(-1)
+        attn_shape = (1, seq_len, seq_len)
+        subsequent_mask = torch.triu(torch.ones(attn_shape), diagonal=1).type(torch.uint8) == 0
+        return self.pad_mask(x) & subsequent_mask.to(self.device)
 
     def forward(self, src, trg):
-        src_mask, trg_mask = self.pad_mask(src), self.dec_mask(trg)
-        enc_out = self.encoder(src, src_mask)
-        dec_out = self.decoder(trg, enc_out, src_mask, trg_mask)
-        return self.fc_out(dec_out)
-    
-    def pad_mask(self, x):
-        return (x != self.pad_idx).unsqueeze(1).unsqueeze(2).to(self.device)
-    
-    def dec_mask(self, x):
-        pad_mask = self.pad_mask(x)
-        sub_mask = torch.tril(torch.ones((x.size(-1), x.size(-1)))).bool().to(self.device)
-        return pad_mask & sub_mask
-
-    def _init_weights(self, module):
-        if hasattr(module, 'weight') and module.weight.dim() > 1:
-            nn.init.xavier_uniform_(module.weight.data)
+        e_mask, d_mask = self.pad_mask(src), self.dec_mask(trg)
+        memory = self.encoder(src, e_mask)
+        dec_out = self.decoder(trg, memory, e_mask, d_mask)
+        return self.fc_out(dec_out)        

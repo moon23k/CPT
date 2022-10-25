@@ -1,23 +1,26 @@
 import json, torch
+from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader, Dataset
 
 
 
-def read_json(f_name):
-    with open(f"data/{f_name}", 'r') as f:
-        data = json.load(f)
-    return data
 
-
-class ChatDataset(Dataset):
+class Dataset(torch.utils.data.Dataset):
     def __init__(self, config, split):
         super().__init__()
         self.model_name = config.model_name
-        self.data = read_json(f'{split}.json')
+        self.data = self.read_dataset(split)
+
+
+    def read_dataset(self, split):
+        with open(f"data/{split}.json", 'r') as f:
+            data = json.load(f)
+        return data
+
 
     def __len__(self):
         return len(self.data)
+
     
     def __getitem__(self, idx):
         src = self.data[idx]['src']
@@ -37,11 +40,11 @@ def rnn_collate(batch):
         trg_batch.append(torch.LongTensor(trg))
         
     src_batch = pad_sequence(src_batch, 
-                             batch_first=True, 
+                             batch_first=False, 
                              padding_value=1)
     
     trg_batch = pad_sequence(trg_batch, 
-                             batch_first=True, 
+                             batch_first=False, 
                              padding_value=1)
     
     return {'src': src_batch, 'trg': trg_batch}
@@ -72,7 +75,7 @@ def transformer_collate(batch):
 
 
 def load_dataloader(config, split):
-    dataset = ChatDataset(config, split)
+    dataset = Dataset(config, split)
     
     if config.model_name == 'transformer':
         return DataLoader(dataset, 

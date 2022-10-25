@@ -1,38 +1,48 @@
 import torch
+import sentencepiece as spm
+from run import load_tokenizer
+from modules.search import SeqSearch, AttnSearch, TransSearch
 
 
 
 class Translator:
-	def __init__(self, config, model, src_tokenizer, trg_tokenizer):
+	def __init__(self, config, model):
 		self.model = model
-		self.max_len = 100
 		self.device = config.device
 		self.search = config.search
 		self.bos_idx = config.bos_idx
-		self.src_tokenizer = src_tokenizer
-		self.trg_tokenizer = trg_tokenizer
 		self.model_name == config.model_name
+        self.src_tokenizer = load_tokenizer('src')
+		self.trg_tokenizer = load_tokenizer('trg')
+
+        if self.model.training:
+            self.model.eval()
+
+        if self.model_name == 'seq2seq':
+            self.beam = SeqSearch(config, self.model)
+        elif self.model_name == 'attention':
+            self.beam = AttnSearch(config, self.model)
+        elif self.model_name == 'transformer':
+            self.beam = TransSearch(config, self.model)            
 
 	
 	def tranaslate(self, config):
-		self.model.eval()
-		print('Type "quit" to terminate Translation')
+		print('Type "quit" to terminate Chat')
 		while True:
-			user_input = input('please type text >> ')
-			if user_input == 'quit':
-				print('--- Terminate the Translation ---')
+			user_input = input('Please Type User Text >> ')
+			if user_input.lower() == 'quit':
+				print('--- Terminate the Chat ---')
 				print('-' * 30)
 				break
 
 			src = self.src_tokenizer.Encode(user_input)
-			src = torch.LongTensor(src).to(self.device)
-			pred_seq = torch.LongTensor([self.bos_idx]).to(self.device)
+			src = torch.LongTensor(src).unsqueeze(0).to(self.device)
 
-			for t in range(self.max_len):
-				out = self.model(src, pred_seq)
-				pred_word = out.argmax(-1)
-				pred_seq = torch.cat([pred_seq, pred_word])
+            if self.search == 'beam':
+                pred_seq = self.search.beam_search(src)
+            elif self.search == 'greedy':
+                pred_seq = self.search.greedy_search(src)
 
-			print(f"Original Sentence:   {user_input}")
-			print(f'Translated Sequenec: {self.trg_tokenizer.Decode(pred_seq)}\n')
+			print(f"User: {user_input}")
+			print(f'Bot : {self.trg_tokenizer.Decode(pred_seq)}\n')
 			

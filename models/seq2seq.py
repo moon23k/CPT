@@ -1,4 +1,4 @@
-import random, torch
+import torch, random
 import torch.nn as nn
 
 
@@ -32,9 +32,7 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(config.dropout_ratio)
     
     def forward(self, x, hiddens):
-        x = x.unsqueeze(1)
-        x = self.dropout(self.embedding(x))
-
+        x = self.dropout(self.embedding(x.unsqueeze(1)))
         out, hiddens = self.rnn(x, hiddens)
         out = self.fc_out(out.squeeze(1))
         return out, hiddens
@@ -47,11 +45,6 @@ class Seq2Seq(nn.Module):
         self.output_dim = config.output_dim
         self.encoder = Encoder(config)
         self.decoder = Decoder(config)
-        self.apply(self._init_weights)
-
-    def _init_weights(self, module):
-        if hasattr(module, 'weight') and module.weight.dim() > 1:
-            nn.init.uniform_(module.weight.data, -0.08, 0.08)
     
     def forward(self, src, trg, teacher_forcing_ratio=0.5):
         batch_size, max_len = trg.shape
@@ -60,12 +53,11 @@ class Seq2Seq(nn.Module):
         dec_input = trg[:, 0]
         hiddens = self.encoder(src)
 
-        for idx in range(1, max_len):
+        for t in range(1, max_len):
             out, hiddens = self.decoder(dec_input, hiddens)
-            outputs[idx] = out
+            outputs[t] = out
             pred = out.argmax(-1)
             teacher_force = random.random() < teacher_forcing_ratio
-            dec_input = trg[:, idx] if teacher_force else pred
+            dec_input = trg[:, t] if teacher_force else pred
 
-        outputs = outputs.permute(1, 0, 2)
-        return outputs[:, 1:].contiguous()
+        return outputs.contiguous().permute(1, 0, 2)[:, 1:]
