@@ -40,11 +40,11 @@ def rnn_collate(batch):
         trg_batch.append(torch.LongTensor(trg))
         
     src_batch = pad_sequence(src_batch, 
-                             batch_first=False, 
+                             batch_first=True, 
                              padding_value=1)
     
     trg_batch = pad_sequence(trg_batch, 
-                             batch_first=False, 
+                             batch_first=True, 
                              padding_value=1)
     
     return {'src': src_batch, 'trg': trg_batch}

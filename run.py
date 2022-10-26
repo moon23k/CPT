@@ -7,15 +7,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 
+import modules
+from modules.train import Trainer
 from models.seq2seq import Seq2Seq
 from models.attention import Seq2SeqAttn
 from models.transformer import Transformer
-
-from modules.test import Tester
-from modules.train import Trainer
-from modules.inference import Generator
-from modules.data import load_dataloader
-
 
 
 
@@ -27,7 +23,6 @@ def set_seed(SEED=42):
     torch.cuda.manual_seed_all(SEED)
     cudnn.benchmark = False
     cudnn.deterministic = True
-
 
 
 class Config(object):
@@ -49,7 +44,7 @@ class Config(object):
 
         self.clip = 1
         self.n_epochs = 10
-        self.batch_size = 32
+        self.batch_size = 16
         self.learning_rate = 5e-4
         self.ckpt_path = f"ckpt/{self.model_name}.pt"
 
@@ -64,7 +59,6 @@ class Config(object):
     def print_attr(self):
         for attribute, value in self.__dict__.items():
             print(f"* {attribute}: {value}")
-
 
 
 def init_uniform(model):
@@ -127,7 +121,7 @@ def load_model(config):
 
     print(f"The {config.model_name} model has loaded")
     print(f"--- Model Params: {count_params(model):,}")
-    print(f"--- Model  Size : {check_size(model):.3f} MB")
+    print(f"--- Model  Size : {check_size(model):.3f} MB\n")
     return model.to(config.device)
 
 
@@ -140,11 +134,11 @@ def main(config):
         trainer.train()
     
     elif config.task == 'test':
-        tester = Tester(config, model)
+        tester = modules.test.Tester(config, model)
         tester.test()
     
     elif config.task == 'inference':
-        generator = Generator(model, config)
+        generator = modules.inference.Generator(model, config)
         generator.generate()
     
 
