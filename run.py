@@ -12,7 +12,7 @@ from modules.data import load_dataloader
 
 from modules.test import Tester
 from modules.train import Trainer
-from modules.inference import Translator
+from modules.inference import Generator
 
 
 
@@ -114,8 +114,8 @@ def main(args):
     
     elif config.task == 'inference':
         tokenizer = load_tokenizer()
-        translator = Translator(config, model, tokenizer)
-        translator.translate()
+        generator = Generator(config, model, tokenizer)
+        generator.generate()
     
 
 
@@ -123,7 +123,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-task', required=True)
     parser.add_argument('-model', required=True)
-    parser.add_argument('-scheduler', default='constant', required=False)
     parser.add_argument('-search', default='greedy', required=False)
     
     args = parser.parse_args()
