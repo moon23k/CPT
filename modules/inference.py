@@ -16,16 +16,16 @@ class Generator:
 
     def generate(self):
         self.model.eval()
-        print(f'--- Translation Started on {self.model_name} model! ---')
+        print(f'--- Dialogue Generation Started on {self.model_name} model! ---')
         print('[ Type "quit" on user input to stop the Process ]')
         
         while True:
             input_seq = input('\nUser Input sentence >> ')
             if input_seq.lower() == 'quit':
-                print('\n--- Translator has terminated! ---')
+                print('\n--- Dialogue Generation has terminated! ---')
                 break        
             if self.search_method == 'beam':
                 output_seq = self.search.beam_search(input_seq)
             else:
                 output_seq = self.search.greedy_search(input_seq)
-            print(f"Translated sentence >> {output_seq}")       
+            print(f"Generated sentence >> {output_seq}")       
