@@ -184,4 +184,4 @@ class Transformer(nn.Module):
         e_mask, d_mask = self.pad_mask(src), self.dec_mask(trg)
         memory = self.encoder(src, e_mask)
         dec_out = self.decoder(trg, memory, e_mask, d_mask)
-        return self.fc_out(dec_out)        
+        return self.fc_out(dec_out)

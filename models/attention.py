@@ -20,7 +20,7 @@ class Encoder(nn.Module):
         embedded = self.dropout(self.embedding(src))
         out, hidden = self.rnn(embedded)
         
-        hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+        hidden = torch.cat((hidden[0], hidden[1]), dim=1)
         hidden = torch.tanh(self.fc(hidden))
 
         return out, hidden
@@ -78,15 +78,16 @@ class Seq2SeqAttn(nn.Module):
     def __init__(self, config):
         super(Seq2SeqAttn, self).__init__()
 
-        self.encoder = Encoder(config)
-        self.decoder = Decoder(config)
         self.device = config.device
         self.output_dim = config.output_dim
+        
+        self.encoder = Encoder(config)
+        self.decoder = Decoder(config)
 
 
     def forward(self, src, trg, teacher_forcing_ratio=0.5):
         batch_size, max_len = trg.shape
-        outputs = torch.ones(max_len, batch_size, self.output_dim).to(self.device)
+        outputs = torch.zeros(max_len, batch_size, self.output_dim).to(self.device)
 
         dec_input = trg[:, 0]
         enc_out, hidden = self.encoder(src)
@@ -95,8 +96,7 @@ class Seq2SeqAttn(nn.Module):
             out, hidden = self.decoder(dec_input, enc_out, hidden)
             outputs[t] = out
 
-            pred = out.argmax(1)
             teacher_force = random.random() < teacher_forcing_ratio
-            dec_input = trg[:, t] if teacher_force else pred
+            dec_input = trg[:, t] if teacher_force else out.argmax(1)
         
         return outputs.contiguous().permute(1, 0, 2)[:, 1:]

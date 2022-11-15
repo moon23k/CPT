@@ -5,300 +5,227 @@ from collections import namedtuple
 
 
 
-
-def get_score(node, max_repeats, pad_idx, min_length=5, alpha=1.2):
-    pred_repeats = max([node.pred.tolist().count(token) for token in node.pred.tolist() if token != pad_idx])
-
-    if pred_repeats > max_repeats + 5:
-        repeat_penalty = -1
-    else:
-        repeat_penalty = 1
-    
-    length_penalty = ((node.length + min_length) / (1 + min_length)) ** alpha
-    score = node.log_prob / length_penalty
-    score = score * repeat_penalty
-    return score
-
-
-def get_output(top_node, model_name):
-    if model_name != 'transformer':
-        output = []
-        while top_node.prev_node is not None:
-            output.append(top_node.pred.item())
-            top_node = top_node.prev_node
-        return output[::-1]
-
-    elif model_name == 'transformer':
-        return top_node.pred.tolist()
-
-
-def src_params(src, pad_idx, bos_idx):
-    if src.dim == 1:
-        src = src.unsqueeze(0)
-    batch_size, max_len = src.size(0), src.size(1) + 50
-    src_repeats = [max([seq.count(token) for token in seq if token != pad_idx]) for seq in src.tolist()]    
-    return src, batch_size, max_len, src_repeats
-
-
-def get_nodes(start_node, beam_size):
-    nodes = PriorityQueue()
-    for _ in range(beam_size):
-        nodes.put((0, start_node))        
-    return nodes, [], []    
-
-
-
-
-class SeqSearch:
-    def __init__(self, config, model):
-        self.model = model
+class Beam:
+    def __init__(self, config, model, tokenizer):
+        super(Beam, self).__init__()
         self.beam_size = 4
+        self.model = model
+        self.tokenizer = tokenizer
         self.device = config.device
         self.bos_idx = config.bos_idx
         self.eos_idx = config.eos_idx
         self.pad_idx = config.pad_idx
-        self.output_dim = config.output_dim
         self.model_name = config.model_name
+        
+        if self.model.training:
+            self.model.eval()
+        
+        if self.model_name != 'transformer':
+            self.Node = namedtuple('Node', ['prev_node', 'pred', 'log_prob', 'hidden', 'length'])
+        elif self.model_name == 'transformer':
+            self.Node = namedtuple('Node', ['prev_node', 'pred', 'log_prob', 'length'])
 
 
-    def search(self, src, topk=1):
-        outputs = []
-        Node = namedtuple('Node', ['prev_node', 'hidden', 'log_prob', 'pred', 'preds', 'length'])
+    def get_score(self, node, max_repeat, min_length=5, alpha=1.2):
+        repeat = max([node.pred.tolist().count(token) for token in node.pred.tolist() if token != self.pad_idx])
+
+        if repeat > max_repeat + 5:
+            repeat_penalty = -1
+        else:
+            repeat_penalty = 1
         
-        start_tensor = torch.LongTensor([self.bos_idx]).to(self.device)
-        src, batch_size, max_len, src_repeats = src_params(src, self.pad_idx, self.bos_idx)
-        hiddens = self.model.encoder(src)
-        
-        for idx in range(batch_size):
-            hidden = (hiddens[0][:, idx, :].unsqueeze(1).contiguous(),
-                      hiddens[1][:, idx, :].unsqueeze(1).contiguous())
-            
+        len_penalty = ((node.length + min_length) / (1 + min_length)) ** alpha
+        score = node.log_prob / len_penalty
+        score = score * repeat_penalty
+        return score
+
+
+    def get_nodes(self, hidden=None):
+        Node = self.Node
+        nodes = PriorityQueue()
+        start_tensor = torch.LongTensor([[self.bos_idx]]).to(self.device)
+
+        if self.model_name != 'transformer':
             start_node = Node(prev_node = None, 
-                              hidden = hidden, 
-                              log_prob = 0.0, 
                               pred = start_tensor, 
-                              preds = [start_tensor.item()],
-                              length = 0)
-
-            nodes, end_nodes, top_nodes = get_nodes(start_node, self.beam_size)
-            for t in range(max_len):
-                curr_nodes = [nodes.get() for _ in range(self.beam_size)]
-                for curr_score, curr_node in curr_nodes:
-                    if curr_node.pred.item() == self.eos_idx and curr_node.prev_node != None:
-                        if curr_node.length <= 3:  #if generate length is too short, skip the node
-                            continue
-                        end_nodes.append((curr_score, curr_node))
-                        continue
-                        
-                    out, _hidden = self.model.decoder(curr_node.pred, curr_node.hidden)
-                    logits, preds = torch.topk(out, self.beam_size)
-                    log_probs = F.log_softmax(logits, dim=-1)
-
-                    for k in range(self.beam_size):
-                        pred = preds[0][k].view(1)
-                        log_prob = log_probs[0][k].item()
-
-                        next_node = Node(prev_node = curr_node,
-                                         hidden = (_hidden[0].contiguous(), _hidden[1].contiguous()),
-                                         log_prob = curr_node.log_prob + log_prob,
-                                         pred = pred.contiguous(),
-                                         preds = curr_node.preds + [pred.item()],
-                                         length = curr_node.length + 1)
-                        
-                        next_score = get_score(next_node, src_repeats[idx], self.pad_idx)
-                        nodes.put((next_score, next_node))    
-
-                    if not t:
-                        break
-
-            if len(end_nodes) == 0:
-                _, top_node = nodes.get()
-            else:
-                _, top_node = sorted(end_nodes, key=operator.itemgetter(0), reverse=True)[0]
-            
-            output = get_output(top_node, self.model_name)
-            outputs.append(output)
-
-        return outputs    
-
-
-    def greedy_search(self, src):
-        outputs = []
-        src, batch_size, max_len, _ = src_params(src, self.pad_idx, self.bos_idx)
-
-        return outputs
-
-
-
-
-class AttnSearch:
-    def __init__(self, config, model):
-        self.model = model
-        self.beam_size = 4
-        self.device = config.device
-        self.bos_idx = config.bos_idx
-        self.eos_idx = config.eos_idx
-        self.pad_idx = config.pad_idx
-        self.output_dim = config.output_dim
-        self.model_name = config.model_name
-
-
-    def beam_search(self, src, topk=1):
-        outputs = []
-        Node = namedtuple('Node', ['prev_node', 'hidden', 'log_prob', 'pred', 'preds', 'length'])
-        
-        start_tensor = torch.LongTensor([self.bos_idx]).to(self.device)
-        src, batch_size, max_len, src_repeats = src_params(src, self.pad_idx, self.bos_idx)
-        memories, hiddens = self.model.encoder(src)
-
-        for idx in range(batch_size):
-            memory = memories[idx].unsqueeze(0).contiguous()
-            hidden = hiddens[idx].unsqueeze(0).contiguous()
-            
-            start_node = Node(prev_node = None,
-                              hidden = hidden, 
                               log_prob = 0.0, 
-                              pred = start_tensor, 
-                              preds = [start_tensor.item()],
+                              hidden = hidden,                               
                               length = 0)
-
-            nodes, end_nodes, top_nodes = get_nodes(start_node, self.beam_size)
-            for t in range(max_len):
-                curr_nodes = [nodes.get() for _ in range(self.beam_size)]
-                for curr_score, curr_node in curr_nodes:
-                    if curr_node.pred.item() == self.eos_idx and curr_node.prev_node != None:
-                        if curr_node.length <= 3:  #if generate length is too short, skip the node
-                            continue
-                        end_nodes.append((curr_score, curr_node))
-                        continue
-                    
-                    out, _hidden = self.model.decoder(curr_node.pred, memory, curr_node.hidden)
-                    logits, preds = torch.topk(out, self.beam_size)
-                    log_probs = F.log_softmax(logits, dim=-1)
-
-                    for k in range(self.beam_size):
-                        pred = preds[0][k].view(1)
-                        log_prob = log_probs[0][k].item()
-
-                        next_node = Node(prev_node = curr_node,
-                                         hidden = _hidden.unsqueeze(0).contiguous(),
-                                         log_prob = curr_node.log_prob + log_prob,
-                                         pred = pred.contiguous(),
-                                         preds = curr_node.preds + [pred.item()],
-                                         length = curr_node.length + 1)
-                        
-                        next_score = get_score(next_node, src_repeats[idx], self.pad_idx)
-                        nodes.put((next_score, next_node))    
-
-                    if not t:
-                        break
-
-            if len(end_nodes) == 0:
-                _, top_node = nodes.get()
-            else:
-                _, top_node = sorted(end_nodes, key=operator.itemgetter(0), reverse=True)[0]
-            
-            output = get_output(top_node, self.model_name)
-            outputs.append(output)
-
-        return outputs        
-
-
-    def greedy_search(self, src):
-        outputs = []
-        src, batch_size, max_len, _ = src_params(src, self.pad_idx, self.bos_idx)
-        
-        return outputs
-
-
-
-
-class TransSearch:
-    def __init__(self, config, model):
-        self.model = model
-        self.beam_size = 4
-        self.device = config.device
-        self.bos_idx = config.bos_idx
-        self.eos_idx = config.eos_idx
-        self.pad_idx = config.pad_idx
-        self.output_dim = config.output_dim
-        self.model_name = config.model_name
-
-
-    def beam_search(self, src, topk=1):
-        outputs = []
-        Node = namedtuple('Node', ['prev_node', 'pred', 'pred_mask', 'log_prob', 'length'])
-        
-        start_tensor = torch.LongTensor([self.bos_idx]).to(self.device)
-        src, batch_size, max_len, src_repeats = src_params(src, self.pad_idx, self.bos_idx)
-
-        src_masks = self.model.pad_mask(src)
-        memories = self.model.encoder(src, src_masks)
-
-        for idx in range(batch_size):
-            memory = memories[idx, :, :].unsqueeze(0).contiguous()
-            src_mask = src_masks[idx, :, :].unsqueeze(0).contiguous()
-            
+        elif self.model_name == 'transformer':
             start_node = Node(prev_node = None,
                               pred = start_tensor,
-                              pred_mask = self.model.dec_mask(start_tensor),
                               log_prob = 0.0,
                               length = 0)
 
-            nodes, end_nodes, top_nodes = get_nodes(start_node, self.beam_size)
-            for t in range(max_len):
-                curr_nodes = [nodes.get() for _ in range(self.beam_size)]
-                for curr_score, curr_node in curr_nodes:
-                    if curr_node.pred[-1].item() == self.eos_idx and curr_node.prev_node != None:
-                        if curr_node.length <= 3:  #if generate length is too short, skip the node
-                            continue
-                        end_nodes.append((curr_score, curr_node))
-                        continue
-                        
-                    dec_out = self.model.decoder(curr_node.pred.unsqueeze(0), memory, src_mask, curr_node.pred_mask)
-                    out = self.model.fc_out(dec_out)[:, -1, :]
-                    logits, preds = torch.topk(out, self.beam_size)
-                    logits, preds = logits.squeeze(1), preds.squeeze(1)
-                    log_probs = F.log_softmax(logits, dim=-1)
+        for _ in range(self.beam_size):
+            nodes.put((0, start_node))        
+        return Node, nodes, [], []    
 
-                    for k in range(self.beam_size):
-                        pred = preds[0][k].view(1)
-                        log_prob = log_probs[0][k].item()
-                        new_pred = torch.cat([curr_node.pred, pred])
-                        new_pred_mask = self.model.dec_mask(new_pred.contiguous().unsqueeze(0))           
-                        
-                        next_node = Node(prev_node = curr_node,
-                                         pred = new_pred,
-                                         pred_mask = new_pred_mask,
-                                         log_prob = curr_node.log_prob + log_prob,
-                                         length = curr_node.length + 1)
-                        next_score = get_score(next_node, src_repeats[idx], self.pad_idx)                
-                        nodes.put((next_score, next_node))
-                    
-                    if not t:
-                        break
 
-            if len(end_nodes) == 0:
-                _, top_node = nodes.get()
-            else:
-                _, top_node = sorted(end_nodes, key=operator.itemgetter(0), reverse=True)[0]
+    def get_input_params(self, input_seq):
+        input_tokens = self.tokenizer.encode(input_seq)
+        input_tensor = torch.LongTensor([input_tokens]).to(self.device)
+        max_len = len(input_tokens) + 30
+        max_repeat = max([input_tokens.count(token) for token in input_tokens if token != self.pad_idx])
+        return input_tensor, max_len, max_repeat        
+
+
+
+
+class RNNSearch(Beam):
+    def __init__(self, config, model, tokenizer):
+        super(RNNSearch, self).__init__(config, model, tokenizer)
+
+    def beam_search(self, input_seq, topk=1):
+        input_tensor, max_len, max_repeat = self.get_input_params(input_seq)
+        
+        if self.model_name == 'seq2seq':
+            hidden = self.model.encoder(input_tensor)
+        elif self.model_name == 'attention':
+            e_out, hidden = self.model.encoder(input_tensor)
+
+        Node, nodes, end_nodes, top_nodes = self.get_nodes(hidden=hidden)
+
+        for t in range(max_len):
+            curr_nodes = [nodes.get() for _ in range(self.beam_size)]
             
-            output = get_output(top_node, self.model_name)
-            outputs.append(output)
+            for curr_score, curr_node in curr_nodes:
+                if curr_node.pred[:, -1].item() == self.eos_idx and curr_node.prev_node != None:
+                    end_nodes.append((curr_score, curr_node))
+                    continue
 
-        return outputs        
+                if self.model_name == 'seq2seq':
+                    out, hidden = self.model.decoder(curr_node.pred[:, -1], curr_node.hidden)
+                elif self.model_name == 'attention':
+                    out, hidden = self.model.decoder(curr_node.pred[:, -1], e_out, curr_node.hidden)
+                    hidden = hidden.unsqueeze(0)    
+                
+                logits, preds = torch.topk(out, self.beam_size)
+                logits, preds = logits, preds
+                log_probs = -F.log_softmax(logits, dim=-1)
 
+                for k in range(self.beam_size):
+                    pred = preds[:, k].unsqueeze(0)
+                    log_prob = log_probs[:, k].item()
+                    pred = torch.cat([curr_node.pred, pred], dim=-1)
 
-    def greedy_search(self, src):
-        outputs = []
-        src, batch_size, max_len, _ = src_params(src, self.pad_idx, self.bos_idx)
+                    next_node = Node(prev_node = curr_node,
+                                     pred = pred,
+                                     log_prob = curr_node.log_prob + log_prob,
+                                     hidden = hidden,
+                                     length = curr_node.length + 1)
+                    
+                    next_score = self.get_score(next_node, max_repeat)
+                    nodes.put((next_score, next_node))    
 
-        e_mask, d_mask = self.model.pad_mask(src), self.model.dec_mask(trg)
-        memory = self.model.encoder(src, e_mask)
-
-        for idx in range(batch_size):
-            for t in range(max_len):
-                if pred == self.eos_id:
+                if not t:
                     break
 
-        return outputs 
+        if len(end_nodes) == 0:
+            _, top_node = nodes.get()
+        else:
+            _, top_node = sorted(end_nodes, key=operator.itemgetter(0), reverse=True)[0]
+        
+        beam_out = top_node.pred.squeeze(0).tolist()
+        return self.tokenizer.decode(beam_out)      
+    
+
+    def greedy_search(self, input_seq):
+        input_tensor, max_len, _ = self.get_input_params(input_seq)
+
+        output_seq = [[self.pad_idx  if i else self.bos_idx for i in range(max_len)]]        
+        output_tensor = torch.LongTensor(output_seq).to(self.device)
+        dec_input = output_tensor[:, 0]
+
+        if self.model_name == 'seq2seq':
+            hiddens = self.model.encoder(input_tensor)
+            for i in range(1, max_len):
+                out, hiddens = self.model.decoder(dec_input, hiddens)
+                output_tensor[:, i] = out.argmax(-1)
+                dec_input = output_tensor[:, i]
+
+        elif self.model_name == 'attention':
+            enc_out, hiddens = self.model.encoder(input_tensor)
+            for i in range(1, max_len):
+                out, hiddens = self.model.decoder(dec_input, enc_out, hiddens)
+                hiddens = hiddens.unsqueeze(0)
+                output_tensor[:, i] = out.argmax(-1)
+                dec_input = output_tensor[:, i]
+
+        return self.tokenizer.decode(output_tensor.squeeze(0).tolist())
+
+
+
+class TransSearch(Beam):
+    def __init__(self, config, model, tokenizer):
+        super(TransSearch, self).__init__(config, model, tokenizer)
+
+    def beam_search(self, input_seq, topk=1):
+        Node, nodes, end_nodes, top_nodes = self.get_nodes()
+        input_tensor, max_len, max_repeat = self.get_input_params(input_seq)
+
+        e_mask = self.model.pad_mask(input_tensor)
+        memory = self.model.encoder(input_tensor, e_mask)
+        
+        for t in range(max_len):
+            curr_nodes = [nodes.get() for _ in range(self.beam_size)]
+
+            for curr_score, curr_node in curr_nodes:
+                if curr_node.pred[:, -1].item() == self.eos_idx and curr_node.prev_node != None:
+                    end_nodes.append((curr_score, curr_node))
+                    continue
+                
+                d_input = curr_node.pred 
+                d_mask = self.model.dec_mask(d_input)
+                d_out = self.model.decoder(d_input, memory, e_mask, d_mask)
+                out = self.model.fc_out(d_out)[:, -1]
+                
+                logits, preds = torch.topk(out, self.beam_size)
+                logits, preds = logits, preds
+                log_probs = -F.log_softmax(logits, dim=-1)
+
+                for k in range(self.beam_size):
+                    pred = preds[:, k].unsqueeze(0)
+                    log_prob = log_probs[:, k].item()
+                    pred = torch.cat([curr_node.pred, pred], dim=-1)           
+                    
+                    next_node = Node(prev_node = curr_node,
+                                     pred = pred,
+                                     log_prob = curr_node.log_prob + log_prob,
+                                     length = curr_node.length + 1)
+                    next_score = self.get_score(next_node, max_repeat)                
+                    nodes.put((next_score, next_node))
+                
+                if not t:
+                    break
+
+        if len(end_nodes) == 0:
+            _, top_node = nodes.get()
+        else:
+            _, top_node = sorted(end_nodes, key=operator.itemgetter(0), reverse=True)[0]
+        
+        beam_out = top_node.pred.squeeze(0).tolist()
+        return self.tokenizer.decode(beam_out)        
+
+
+    def greedy_search(self, input_seq):
+        input_tensor, max_len, _ = self.get_input_params(input_seq)
+
+        output_seq = [[self.pad_idx  if i else self.bos_idx for i in range(max_len)]]
+        output_tensor = torch.LongTensor(output_seq).to(self.device)
+
+        e_mask = self.model.pad_mask(input_tensor)
+        memory = self.model.encoder(input_tensor, e_mask)        
+
+        for i in range(1, max_len):
+            d_mask = self.model.pad_mask(output_tensor)
+            out = self.model.decoder(output_tensor, memory, e_mask, d_mask)
+            out = self.model.fc_out(out)
+            
+            pred = out[:, i].argmax(-1)
+            output_tensor[:, i] = pred
+
+            if pred.item() == self.eos_idx:
+                break
+
+        return self.tokenizer.decode(output_tensor.squeeze(0).tolist())

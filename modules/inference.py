@@ -1,46 +1,31 @@
-import torch, run
-import sentencepiece as spm
-from modules.search import SeqSearch, AttnSearch, TransSearch
+from modules.search import RNNSearch, TransSearch
 
 
 
 class Generator:
-    def __init__(self, config, model):
+    def __init__(self, config, model, tokenizer):
         self.model = model
-        self.device = config.device
-        self.search = config.search
-        self.bos_idx = config.bos_idx
-        self.model_name == config.model_name
-        self.tokenizer = run.load_tokenizer()
+        self.model_name = config.model_name
+        self.search_method = config.search_method
 
-        if self.model.training:
-            self.model.eval()
+        if config.model_name != 'transformer':
+            self.search = RNNSearch(config, model, tokenizer)
+        else:
+            self.search = TransSearch(config, model, tokenizer)
 
-        if self.model_name == 'seq2seq':
-            self.beam = SeqSearch(config, self.model)
-        elif self.model_name == 'attention':
-            self.beam = AttnSearch(config, self.model)
-        elif self.model_name == 'transformer':
-            self.beam = TransSearch(config, self.model)            
 
-	
-    def generate(self, config):
-        print('Type "quit" to terminate Chat')
+    def generate(self):
+        self.model.eval()
+        print(f'--- Translation Started on {self.model_name} model! ---')
+        print('[ Type "quit" on user input to stop the Process ]')
+        
         while True:
-            user_input = input('Please Type User Text >> ')
-            if user_input.lower() == 'quit':
-                print('--- Terminate the Chat ---')
-                print('-' * 30)
-                break
-
-            src = self.tokenizer.Encode(user_input)
-            src = torch.LongTensor(src).unsqueeze(0).to(self.device)
-
-            if self.search == 'beam':
-                pred_seq = self.search.beam_search(src)
-            elif self.search == 'greedy':
-                pred_seq = self.search.greedy_search(src)
-
-            print(f"User: {user_input}")
-            print(f'Bot : {self.tokenizer.Decode(pred_seq)}\n')
-            
+            input_seq = input('\nUser Input sentence >> ')
+            if input_seq.lower() == 'quit':
+                print('\n--- Translator has terminated! ---')
+                break        
+            if self.search_method == 'beam':
+                output_seq = self.search.beam_search(input_seq)
+            else:
+                output_seq = self.search.greedy_search(input_seq)
+            print(f"Translated sentence >> {output_seq}")       

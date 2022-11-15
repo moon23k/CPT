@@ -48,7 +48,7 @@ class Seq2Seq(nn.Module):
     
     def forward(self, src, trg, teacher_forcing_ratio=0.5):
         batch_size, max_len = trg.shape
-        outputs = torch.ones(max_len, batch_size, self.output_dim).to(self.device)
+        outputs = torch.zeros(max_len, batch_size, self.output_dim).to(self.device)
 
         dec_input = trg[:, 0]
         hiddens = self.encoder(src)
