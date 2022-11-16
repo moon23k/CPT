@@ -1,7 +1,7 @@
 import torch, math, time
 import torch.nn as nn
 from torchtext.data.metrics import bleu_score
-from modules.inference import RNNSearch, TransSearch
+from modules.search import RNNSearch, TransSearch
 
 
 
