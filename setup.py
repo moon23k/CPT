@@ -29,8 +29,8 @@ def build_vocab():
             --vocab_size={vocab_dict['vocab_size']}\
             --character_coverage={vocab_dict['coverage']}\
             --model_type={vocab_dict['type']}\
-            --unk_id={vocab_dict['unk_id']} --unk_piece={vocab_dict['unk_piece']}\
             --pad_id={vocab_dict['pad_id']} --pad_piece={vocab_dict['pad_piece']}\
+            --unk_id={vocab_dict['unk_id']} --unk_piece={vocab_dict['unk_piece']}\
             --bos_id={vocab_dict['bos_id']} --bos_piece={vocab_dict['bos_piece']}\
             --eos_id={vocab_dict['eos_id']} --eos_piece={vocab_dict['eos_piece']}"
 
@@ -102,29 +102,34 @@ def split_data(dataset, downsize):
 
 
 
-def main(orig_data, downsize=True):
+def main(downsize=True):
+    download_data()
+
+    assert os.path.exists(f'data/dialogues_text.txt')
+    with open('data/dialogues_text.txt', 'r') as f:
+        orig_data = f.readlines()
+
     src, trg = split_data(orig_data, downsize)
     
     build_vocab()
     tokenized_data = tokenize_data(src, trg)
-    
     train, valid, test = tokenized_data[:-6000], tokenized_data[-6000:-3000], tokenized_data[-3000:]
+    
+    if downsize:
+        train, valid, test = train[:30000], valid[:1000], test[:1000]
+
     data_dict = {k:v for k, v in zip(['train', 'valid', 'test'], [train, valid, test])}
 
     for key, val in data_dict.items():
         with open(f'data/{key}.json', 'w') as f:
             json.dump(val, f)
 
-
-
-if __name__ == '__main__':
-    download_data()
-    assert os.path.exists(f'data/dialogues_text.txt')
-    with open('data/dialogues_text.txt', 'r') as f:
-        orig_data = f.readlines()
-
-    main(orig_data)
     assert os.path.exists(f'data/train.json')
     assert os.path.exists(f'data/valid.json')
     assert os.path.exists(f'data/test.json')
     os.remove('data/dialogues_text.txt')    
+
+
+if __name__ == '__main__':
+    main()
+    
