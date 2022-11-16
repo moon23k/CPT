@@ -1,6 +1,5 @@
 import torch, math, time
 import torch.nn as nn
-from torchtext.data.metrics import bleu_score
 from modules.search import RNNSearch, TransSearch
 
 
@@ -51,10 +50,6 @@ class Tester:
         print(f">> Test Loss: {tot_loss:.3f} | Test PPL: {math.exp(tot_loss):.2f}\n")
 
 
-    def get_bleu_score(self, can, ref):
-        return bleu_score([self.tokenizer.Decode(can).split()], 
-                          [[self.tokenizer.Decode(ref).split()]]) * 100
-
         
     def inference_test(self):
         self.model.eval()
@@ -63,34 +58,25 @@ class Tester:
         label_batch = batch['trg_input'].to(self.device)
 
         inference_dicts = []
-        for input_seq, label_seq in zip(input_batch, label_batch):
+        for i in range(3):
             temp_dict = dict()
+
+            input_seq, label_seq = input_batch[i], label_batch[i] 
             input_seq = self.tokenizer.decode(input_seq.tolist()) 
-            label_seq = self.tokenizer.decode(label_seq.tolist())
+            label_seq = self.tokenizer.decode(label_seq.tolist())                        
 
             temp_dict['input_seq'] = input_seq
             temp_dict['label_seq'] = label_seq
 
             temp_dict['greedy_out'] = self.search.greedy_search(input_seq)
             temp_dict['beam_out'] = self.search.beam_search(input_seq)
-
-            temp_dict['greedy_bleu'] = self.get_bleu_score(temp_dict['greedy_out'], label_seq)
-            temp_dict['beam_bleu'] = self.get_bleu_score(temp_dict['beam_out'], label_seq)
             
             inference_dicts.append(temp_dict)
-        
-        inference_dicts = sorted(inference_dicts, key=lambda d: d['beam_bleu'])
-        print_dicts = [inference_dicts[0]] + \
-                      [inference_dicts[self.batch_size // 2]] + \
-                      [inference_dicts[-1]]
+
 
         print(f'Inference Test on {self.model_name} model')
-        for d in print_dicts:
-            print(f">> Input Sequence: {d['input_seq']}")
-            print(f">> Label Sequence: {d['label_seq']}")
-            
+        for d in inference_dicts:
+            print(f">> Input  Sequence: {d['input_seq']}")
+            print(f">> Label  Sequence: {d['label_seq']}")
             print(f">> Greedy Sequence: {d['greedy_out']}")
-            print(f">> Beam   Sequence : {d['beam_out']}")
-            
-            print(f">> Greedy BLEU Score: {d['greedy_bleu']:.2f}")
-            print(f">> Beam   BLEU Score : {d['beam_bleu']:.2f}\n")
+            print(f">> Beam   Sequence: {d['beam_out']}\n")
