@@ -31,6 +31,8 @@ class Dataset(torch.utils.data.Dataset):
 
 
 
+
+
 class Collator(object):
     def __init__(self, pad_id):
         self.pad_id = pad_id
@@ -51,11 +53,13 @@ class Collator(object):
         )
 
 
+
+
 def load_dataloader(config, tokenizer, split):
     return DataLoader(
         Dataset(tokenizer, split), 
         batch_size=config.batch_size, 
-        shuffle=split == 'train',
+        shuffle=split=='train',
         collate_fn=Collator(config.pad_id),
         num_workers=2
     )

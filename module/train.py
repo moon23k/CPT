@@ -7,32 +7,32 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 
-class Trainer:
-    def __init__(self, config, model, train_dataloader, valid_dataloader):
-        super(Trainer, self).__init__()
+
+class TrainerBase:
+    def __init__(self, config):
         
-        self.model = model
-        self.clip = config.clip
-        self.device = config.device
-        self.n_epochs = config.n_epochs
-        self.vocab_size = config.vocab_size
-
-        self.scaler = torch.cuda.amp.GradScaler()
-        self.iters_to_accumulate = config.iters_to_accumulate        
-
-        self.train_dataloader = train_dataloader
-        self.valid_dataloader = valid_dataloader
-
-        self.optimizer = AdamW(self.model.parameters(), lr=config.lr)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, patience=2)
-
-        self.early_stop = config.early_stop
-        self.patience = config.patience        
-
         self.ckpt = config.ckpt
         self.record_path = self.ckpt.replace('.pt', '.json')
         self.record_keys = ['epoch', 'train_loss', 'train_ppl', 'valid_loss', 
                             'valid_ppl', 'learning_rate', 'train_time']
+
+        self.clip = config.clip
+        self.device = config.device
+        self.n_epochs = config.n_epochs        
+        self.scaler = torch.cuda.amp.GradScaler()
+        self.iters_to_accumulate = config.iters_to_accumulate        
+        self.early_stop = config.early_stop
+        self.patience = config.patience        
+        self.optimizer = AdamW(self.model.parameters(), lr=config.lr)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, patience=2)
+
+
+    @staticmethod
+    def measure_time(start_time, end_time):
+        elapsed_time = end_time - start_time
+        elapsed_min = int(elapsed_time / 60)
+        elapsed_sec = int(elapsed_time - (elapsed_min * 60))
+        return f"{elapsed_min}m {elapsed_sec}s"
 
 
     def print_epoch(self, record_dict):
@@ -46,12 +46,17 @@ class Trainer:
               Valid PPL: {record_dict['valid_ppl']:.2f}\n""".replace(' ' * 14, ''))
 
 
-    @staticmethod
-    def measure_time(start_time, end_time):
-        elapsed_time = end_time - start_time
-        elapsed_min = int(elapsed_time / 60)
-        elapsed_sec = int(elapsed_time - (elapsed_min * 60))
-        return f"{elapsed_min}m {elapsed_sec}s"
+
+
+
+class Trainer(TrainerBase):
+    def __init__(self, config, model, train_dataloader, valid_dataloader):
+        super(Trainer, self).__init__(config)
+        
+        self.model = model
+        self.train_dataloader = train_dataloader
+        self.valid_dataloader = valid_dataloader
+
 
 
     def train(self):

@@ -1,4 +1,4 @@
-import os, re, json, yaml
+import os, re, json, yaml, argparse
 from datasets import load_dataset
 from tokenizers.models import BPE
 from tokenizers import Tokenizer, normalizers
@@ -41,7 +41,11 @@ def process_translation_data(data_volumn=101100):
             if volumn_cnt == data_volumn:
                 break
 
-    return processed, corpus
+    #Save Corpus
+    with open('data/translation/corpus.txt', 'w') as f:
+        f.write('\n'.join(corpus))
+
+    return processed 
 
 
 
@@ -120,7 +124,11 @@ def process_dialogue_data():
             processed.append({'x': second_uttr, 'y': third_uttr})
     
 
-    return processed, corpus
+    #Save Corpus
+    with open('data/dialogue/corpus.txt', 'w') as f:
+        f.write('\n'.join(corpus))    
+
+    return processed
 
 
 
@@ -156,13 +164,16 @@ def process_summarization_data(data_volumn=101100):
                     volumn_cnt += 1
             if volumn_cnt == data_volumn:
                 break
+
+    with open('data/summarization/corpus.txt', 'w') as f:
+        f.write('\n'.join(corpus))
     
-    return processed, corpus          
+    return processed           
 
 
 
-def train_tokenizer():
-    corpus_path = f'data/corpus.txt'
+def train_tokenizer(task):
+    corpus_path = f'data/{task}/corpus.txt'
     assert os.path.exists(corpus_path)
     
     assert os.path.exists('config.yaml')
@@ -200,28 +211,35 @@ def save_data(task, data_obj):
 
 
 
-def main():
+def main(task):
     #Prerequisite
     os.makedirs(f'data/{task}', exist_ok=True)
 
     #PreProcess Data
-    translation_data, translation_corpus = process_translation_data()
-    dialogue_data, dialogue_corpus = process_dialogue_data()
-    summarization_data, summarization_corpus = process_summarization_data()
-
+    if task == 'translation':
+        processed = process_translation_data()
+    elif task == 'dialogue':
+        processed = process_dialogue_data()
+    elif task == 'summarization':
+        processed = process_summarization_data()        
 
     #Train Tokenizer
-    corpus = translation_corpus + dialogue_corpus + summarization_corpus
-    with open('data/corpus.txt', 'w') as f:
-        json.dump(f, corpus)
-    train_tokenizer()
+    train_tokenizer(task)
 
     #Save Data
-    save_data('translation', translation_data)
-    save_data('dialogue', dialogue_data)
-    save_data('summarization', summarization_data)
+    save_data(task, processed)
 
 
 
-if __name__ == '__main__': 
-    main()    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-task', required=True)
+    
+    args = parser.parse_args()
+    assert args.task in ['all', 'translation', 'dialogue', 'summarization']
+    
+    if args.task == 'all':
+        for task in ['translation', 'dialogue', 'summarization']:
+            main(task)
+    else: 
+        main(args.task)    

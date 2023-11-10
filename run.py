@@ -6,6 +6,7 @@ from tokenizers.processors import TemplateProcessing
 from module import (
     load_dataloader,
     load_model,
+    PreTrainer,
     Trainer,
     Tester,
     Generator
@@ -42,8 +43,8 @@ class Config(object):
         self.model_type = args.model
         self.search_method = args.search
 
-        self.ckpt = f"ckpt/text_model.pt"
-        self.tokenizer_path = 'data/tokenizer.json'
+        self.ckpt = f"ckpt/{self.task}/model.pt"
+        self.tokenizer_path = f'data/{self.task}/tokenizer.json'
 
         use_cuda = torch.cuda.is_available()
         self.device_type = 'cuda' \
@@ -81,7 +82,13 @@ def main(args):
     tokenizer = load_tokenizer(config)
 
 
-    if config.mode == 'train':
+    if config.mode == 'pretrain':
+        train_dataloader = load_dataloader(config, tokenizer, 'train')
+        valid_dataloader = load_dataloader(config, tokenizer, 'valid')
+        trainer = Trainer(config, model, train_dataloader, valid_dataloader)
+        trainer.train()        
+
+    elif config.mode == 'train':
         train_dataloader = load_dataloader(config, tokenizer, 'train')
         valid_dataloader = load_dataloader(config, tokenizer, 'valid')
         trainer = Trainer(config, model, train_dataloader, valid_dataloader)
@@ -105,8 +112,8 @@ if __name__ == '__main__':
     parser.add_argument('-search', default='greedy', required=False)
     
     args = parser.parse_args()
-    assert args.task in ['translation', 'dialogue', 'summarization']
-    assert args.mode in ['train', 'test', 'inference']
-    assert args.search in ['greedy', 'beam']
+    assert args.task.lower() in ['translation', 'dialogue', 'summarization']
+    assert args.mode.lower() in ['pretrain', 'train', 'test', 'inference']
+    assert args.search.lower() in ['greedy', 'beam']
 
     main(args)
