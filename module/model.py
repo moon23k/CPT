@@ -36,13 +36,15 @@ def load_model(config):
     model = Transformer(config)
 
     init_weights(model)
-    print(f"Initialized {config.path} Model has Loaded")
+    print(f"Initialized Model has Loaded")
 
-    if config.mode != 'train':
-        assert os.path.exists(config.ckpt)
-        model_state = torch.load(config.ckpt, map_location=config.device)['model_state_dict']
+    mode = config.mode
+    if mode != 'pretrain':
+        ckpt = config.pt_ckpt if mode == 'train' else config.ckpt
+        assert os.path.exists(ckpt)
+        model_state = torch.load(ckpt, map_location=config.device)['model_state_dict']
         model.load_state_dict(model_state)
-        print(f"Trained Model States have loaded from {config.ckpt}")       
+        print(f"Trained Model States have loaded from {ckpt}")
     
     print_model_desc(model)
     return model.to(config.device)

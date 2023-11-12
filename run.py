@@ -6,7 +6,6 @@ from tokenizers.processors import TemplateProcessing
 from module import (
     load_dataloader,
     load_model,
-    PreTrainer,
     Trainer,
     Tester,
     Generator
@@ -40,10 +39,10 @@ class Config(object):
 
         self.task = args.task
         self.mode = args.mode
-        self.model_type = args.model
         self.search_method = args.search
-
+        
         self.ckpt = f"ckpt/{self.task}/model.pt"
+        self.pt_ckpt = f"ckpt/{self.task}/pt_model.pt"
         self.tokenizer_path = f'data/{self.task}/tokenizer.json'
 
         use_cuda = torch.cuda.is_available()
