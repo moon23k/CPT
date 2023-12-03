@@ -52,6 +52,11 @@ class Config(object):
         self.device = torch.device(self.device_type)
 
 
+        #여기가 모델을 로드하는 과정에서의 조건값 세팅
+        self.pretrain_encoder = True if self.pt_strategy != 'none' else False
+        self.pretrain_decoder = True if self.pt_strategy == 'seq2seq' else False
+
+
     def print_attr(self):
         for attribute, value in self.__dict__.items():
             print(f"* {attribute}: {value}")
@@ -108,11 +113,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-task', required=True)
     parser.add_argument('-mode', required=True)
+    parser.add_argument('-pt_strategy', default='none', required=False)
     parser.add_argument('-search', default='greedy', required=False)
     
     args = parser.parse_args()
     assert args.task.lower() in ['translation', 'dialogue', 'summarization']
     assert args.mode.lower() in ['pretrain', 'train', 'test', 'inference']
+    assert args.pt_strategy.lower() in ['none', 'encoder', 'seq2seq']
     assert args.search.lower() in ['greedy', 'beam']
 
+    os.makedirs(f"ckpt/{args.pt_strategy}", exist_ok=True)
     main(args)

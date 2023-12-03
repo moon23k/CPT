@@ -33,6 +33,15 @@ def print_model_desc(model):
 
 
 def load_model(config):
+
+    if config.task == 'train' and config.pt_strategy == 'encoder':
+        model = Encoder(config)
+        init_weights(model)
+        print(f"Initialized Encoder Model has Loaded for PreTraining")
+        return model.to(config.device)
+
+
+
     model = Transformer(config)
 
     init_weights(model)

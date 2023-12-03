@@ -74,11 +74,31 @@ class Encoder(nn.Module):
         self.layers = clones(layer, config.n_layers)
 
 
+        if config.pretrain_encoder:
+            self.pooler = nn.Linear(config.hidden_dim, config.vocab_size)
+            self.criterion = nn.CrossEntropyLoss()
+            self.out = namedtuple('Out', 'logit loss')
+
+
     def forward(self, x, e_mask):
         x = self.embeddings(x)
         for layer in self.layers:
             x = layer(x, src_key_padding_mask=e_mask)
-        return x
+        
+
+        if not self.pretrain_encoder:
+            return x
+
+
+        logit = self.pooler(x)
+        
+        self.out.logit = logit
+        self.out.loss = self.criterion(
+            logit.contiguous().view(-1, self.vocab_size), 
+            label.contiguous().view(-1)
+        )
+
+        return self.out
 
 
 
