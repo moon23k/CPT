@@ -30,3 +30,4 @@ train:
     patience: 3
     clip: 1
     iters_to_accumulate: 4
+    mlm_prob: 0.15

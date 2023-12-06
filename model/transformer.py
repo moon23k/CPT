@@ -73,29 +73,30 @@ class Encoder(nn.Module):
         self.embeddings = Embeddings(config)
         self.layers = clones(layer, config.n_layers)
 
+        self.pretrain_encoder = False
+        if config.mode == 'pretrain' and config.pt_obj == 'masked':
+            
+            self.pretrain_encoder = True
+            self.vocab_size = config.vocab_size
 
-        if config.pretrain_encoder:
             self.pooler = nn.Linear(config.hidden_dim, config.vocab_size)
             self.criterion = nn.CrossEntropyLoss()
             self.out = namedtuple('Out', 'logit loss')
 
 
-    def forward(self, x, e_mask):
+    def forward(self, x, y=None, e_mask=None):
         x = self.embeddings(x)
         for layer in self.layers:
             x = layer(x, src_key_padding_mask=e_mask)
         
-
         if not self.pretrain_encoder:
             return x
 
-
-        logit = self.pooler(x)
-        
+        logit = self.pooler(x)        
         self.out.logit = logit
         self.out.loss = self.criterion(
             logit.contiguous().view(-1, self.vocab_size), 
-            label.contiguous().view(-1)
+            y.contiguous().view(-1)
         )
 
         return self.out
@@ -165,8 +166,9 @@ class Transformer(nn.Module):
         e_mask = self.pad_mask(x)
         d_mask = self.dec_mask(y)
         
+        
         #Actual Processing
-        memory = self.encoder(x, e_mask)
+        memory = self.encoder(x, e_mask=e_mask)
         dec_out = self.decoder(y, memory, e_mask, d_mask)
         logit = self.generator(dec_out)
         

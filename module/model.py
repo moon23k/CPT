@@ -1,6 +1,6 @@
 import os, torch
 import torch.nn as nn
-from model import Transformer
+from model import Encoder, Transformer
 
 
 
@@ -33,27 +33,32 @@ def print_model_desc(model):
 
 
 def load_model(config):
+    mode = config.mode
+    pt_obj = config.pt_obj
+    ckpt = config.pt_ckpt if mode == 'train' else config.ckpt
 
-    if config.task == 'train' and config.pt_strategy == 'encoder':
+    if mode == 'pretrain' and pt_obj == 'masked':
         model = Encoder(config)
         init_weights(model)
-        print(f"Initialized Encoder Model has Loaded for PreTraining")
-        return model.to(config.device)
-
+        print(f"Initialized Encoder Model for {pt_obj.upper()} Language Modeling PreTraining has Loaded")
 
 
     model = Transformer(config)
-
     init_weights(model)
-    print(f"Initialized Model has Loaded")
+    print("Initialized Model has Loaded")
 
-    mode = config.mode
-    if mode != 'pretrain':
-        ckpt = config.pt_ckpt if mode == 'train' else config.ckpt
+    if mode == 'train' and pt_obj == 'masked':
+        assert os.path.exists(ckpt)
+        pt_state_dict = torch.load(ckpt)
+        for name, param in pt_state_dict['model_state_dict'].items():
+            model.state_dict()[f"encoder.{name}"] = param
+        print(f"PreTrained Encoder States have loaded from {ckpt}")
+    
+    else:
         assert os.path.exists(ckpt)
         model_state = torch.load(ckpt, map_location=config.device)['model_state_dict']
         model.load_state_dict(model_state)
-        print(f"Trained Model States have loaded from {ckpt}")
-    
+        print(f"{'PreTrained' if mode == 'train' else 'Trained'} Model States have loaded from {ckpt}")
+
     print_model_desc(model)
     return model.to(config.device)

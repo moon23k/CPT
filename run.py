@@ -39,22 +39,21 @@ class Config(object):
 
         self.task = args.task
         self.mode = args.mode
+        self.pt_obj = args.pt_obj
         self.search_method = args.search
         
-        self.ckpt = f"ckpt/{self.task}/model.pt"
-        self.pt_ckpt = f"ckpt/{self.task}/pt_model.pt"
         self.tokenizer_path = f'data/{self.task}/tokenizer.json'
+        
+        self.ckpt = f"ckpt/{self.task}/{self.pt_obj}_model.pt"
+        self.pt_ckpt = f"pt_ckpt/{self.task}/{self.pt_obj}_model.pt"
+
+
 
         use_cuda = torch.cuda.is_available()
         self.device_type = 'cuda' \
                            if use_cuda and self.mode != 'inference' \
                            else 'cpu'
         self.device = torch.device(self.device_type)
-
-
-        #여기가 모델을 로드하는 과정에서의 조건값 세팅
-        self.pretrain_encoder = True if self.pt_strategy != 'none' else False
-        self.pretrain_decoder = True if self.pt_strategy == 'seq2seq' else False
 
 
     def print_attr(self):
@@ -113,14 +112,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-task', required=True)
     parser.add_argument('-mode', required=True)
-    parser.add_argument('-pt_strategy', default='none', required=False)
+    parser.add_argument('-pt_obj', required=True)
     parser.add_argument('-search', default='greedy', required=False)
     
     args = parser.parse_args()
     assert args.task.lower() in ['translation', 'dialogue', 'summarization']
     assert args.mode.lower() in ['pretrain', 'train', 'test', 'inference']
-    assert args.pt_strategy.lower() in ['none', 'encoder', 'seq2seq']
+    assert args.pt_obj.lower() in ['casual', 'masked', 'masked_casual']
     assert args.search.lower() in ['greedy', 'beam']
 
-    os.makedirs(f"ckpt/{args.pt_strategy}", exist_ok=True)
+    os.makedirs(f"ckpt/{args.task}", exist_ok=True)
+    os.makedirs(f"pt_ckpt/{args.task}", exist_ok=True)
     main(args)
