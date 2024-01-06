@@ -62,18 +62,18 @@ The default values for experimental variables are set as follows, and each value
 ### ⚫ Dialogue Generation
 | Model | ROUGE | Epoch Time | AVG GPU | Max GPU |
 | :---: | :---: | :---: | :---: | :---: |
-| masked LM | 1.49 | 0m 58s | 0.20GB | 1.12GB |
-| casual LM | 1.00 | 0m 43s | 0.20GB | 0.95GB |
-| masked casual LM | 0.90 | 0m 43s | 0.20GB | 0.95GB |
+| masked LM | 1.49 | 0m 58s | 0.20GB | 0.97GB |
+| casual LM | 1.00 | 0m 58s | 0.20GB | 0.97GB |
+| masked casual LM | 0.90 | 0m 58s | 0.20GB | 0.97GB |
 
 <br>
 
 ### ⚫ Text Summarization
 | Model | ROUGE | Epoch Time | AVG GPU | Max GPU |
 | :---: | :---: | :---: | :---: | :---: |
-| masked LM | - | 0m 58s | 0.20GB | 1.12GB |
-| casual LM | - | 0m 43s | 0.20GB | 0.95GB |
-| masked casual LM | - | 0m 43s | 0.20GB | 0.95GB |
+| masked LM | 6.23 | 6m 13s | 0.21GB | 5.85GB |
+| casual LM | 6.05 | 6m 13s | 0.21GB | 5.85GB |
+| masked casual LM | 6.40 | 6m 13s | 0.21GB | 5.85GB |
 
 <br><br>
 
