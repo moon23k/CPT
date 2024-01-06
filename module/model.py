@@ -37,10 +37,17 @@ def load_model(config):
     pt_obj = config.pt_obj
     ckpt = config.pt_ckpt if mode == 'train' else config.ckpt
 
-    if mode == 'pretrain' and pt_obj == 'masked':
-        model = Encoder(config)
+    if mode == 'pretrain':
+        if pt_obj == 'masked':
+            model = Encoder(config)
+            print(f"Initialized Encoder Model for {pt_obj.upper()} Language Modeling PreTraining has Loaded")
+        else:
+            model = Transformer(config)
+            print(f"Initialized Model for {pt_obj.upper()} Language Modeling PreTraining has Loaded")
+    
         init_weights(model)
-        print(f"Initialized Encoder Model for {pt_obj.upper()} Language Modeling PreTraining has Loaded")
+        print_model_desc(model)
+        return model.to(config.device)        
 
 
     model = Transformer(config)

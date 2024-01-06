@@ -122,5 +122,4 @@ if __name__ == '__main__':
     assert args.search.lower() in ['greedy', 'beam']
 
     os.makedirs(f"ckpt/{args.task}", exist_ok=True)
-    os.makedirs(f"pt_ckpt/{args.task}", exist_ok=True)
     main(args)
