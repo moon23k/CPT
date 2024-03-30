@@ -8,6 +8,7 @@ from module import (
     load_model,
     Trainer,
     Tester,
+    Sampler,
     Generator
 )
 
@@ -39,14 +40,13 @@ class Config(object):
 
         self.task = args.task
         self.mode = args.mode
-        self.pt_obj = args.pt_obj
+        self.strategy = args.strategy
         self.search_method = args.search
         
-        self.tokenizer_path = f'data/{self.task}/tokenizer.json'
+        self.tokenizer_path = f'data/tokenizer.json'
         
-        self.ckpt = f"ckpt/{self.task}/{self.pt_obj}_model.pt"
-        self.pt_ckpt = f"pt_ckpt/{self.task}/{self.pt_obj}_model.pt"
-
+        self.ckpt = f"ckpt/{self.strategy}_model.pt"
+        self.pt_ckpt = f"pt_ckpt/{self.strategy}_model.pt"
 
 
         use_cuda = torch.cuda.is_available()
@@ -110,16 +110,13 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-task', required=True)
     parser.add_argument('-mode', required=True)
-    parser.add_argument('-pt_obj', required=True)
+    parser.add_argument('-strategy', required=True)
     parser.add_argument('-search', default='greedy', required=False)
     
     args = parser.parse_args()
-    assert args.task.lower() in ['translation', 'dialogue', 'summarization']
     assert args.mode.lower() in ['pretrain', 'train', 'test', 'inference']
-    assert args.pt_obj.lower() in ['casual', 'masked', 'masked_casual']
+    assert args.strategy.lower() in ['casual', 'masked', 'masked_casual']
     assert args.search.lower() in ['greedy', 'beam']
 
-    os.makedirs(f"ckpt/{args.task}", exist_ok=True)
     main(args)
