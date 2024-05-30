@@ -4,13 +4,10 @@ from tokenizers import Tokenizer
 from tokenizers.processors import TemplateProcessing
 
 from module import (
-    load_dataloader,
-    load_model,
-    Trainer,
-    Tester,
-    Sampler,
-    Generator
+    load_dataloader, load_model,
+    Trainer, Tester, Sampler, SeqGenerator
 )
+
 
 
 
@@ -48,12 +45,10 @@ class Config(object):
         self.ckpt = f"ckpt/{self.strategy}_model.pt"
         self.pt_ckpt = f"pt_ckpt/{self.strategy}_model.pt"
 
-
         use_cuda = torch.cuda.is_available()
-        self.device_type = 'cuda' \
-                           if use_cuda and self.mode != 'inference' \
-                           else 'cpu'
-        self.device = torch.device(self.device_type)
+        device_condition = use_cuda and self.mode != 'inference'
+        self.device_type = 'cuda' if device_condition else 'cpu'
+        self.device = torch.device(self.device_type)    
 
 
     def print_attr(self):
@@ -103,7 +98,7 @@ def main(args):
         tester.test()
     
     elif config.mode == 'inference':
-        generator = Generator(config, model, tokenizer)
+        generator = SeqGenerator(config, model, tokenizer)
         generator.inference()
     
 
